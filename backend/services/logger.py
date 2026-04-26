@@ -1,60 +1,67 @@
-from backend.database.config import SessionLocal
-from backend.models.threat import AttackLog, SessionTrace
-from backend.services.analyzer import ThreatAnalyzer
 import logging
 from datetime import datetime
-import json
-
-logger = logging.getLogger("AttackLogger")
-analyzer = ThreatAnalyzer()
+from typing import Any
+from backend.database.config import SessionLocal
+from backend.models.threat import AttackLog, Session as AttackerSession
+from backend.services.websocket import manager
 
 class AttackLogger:
     def __init__(self):
-        pass
+        logging.basicConfig(level=logging.INFO)
+        self.logger = logging.getLogger("CypherTrap")
 
-    async def log_request(self, request_id, ip, user_agent, path, method, status_code, duration):
-        # 0. Calculate Threat Score using ML/Rules
-        threat_score, threat_level = await analyzer.calculate_threat_score(ip, path, method, duration)
-
-        # Create a new DB session
+    async def log_attack(self, ip: str, query: str, threat_score: float, 
+                         attack_type: str, threat_level: str, 
+                         session_id: str, session_id_fk: Any,
+                         response_type: str, endpoint: str = "/db",
+                         path: str = None, method: str = None, 
+                         status_code: int = 200, duration: float = 0.0):
+        """
+        Persists detailed attack intelligence and broadcasts live event.
+        """
         db = SessionLocal()
         try:
-            # 1. Save Attack Log
-            attack_entry = AttackLog(
-                request_id=request_id,
-                ip_address=ip,
-                user_agent=user_agent,
+            # 1. Save to Database
+            new_log = AttackLog(
+                attacker_ip=ip,
+                session_id=session_id,
+                session_id_fk=session_id_fk,
+                endpoint=endpoint,
                 path=path,
                 method=method,
                 status_code=status_code,
-                duration=duration,
+                query=query,
                 threat_score=threat_score,
-                threat_level=threat_level
+                threat_level=threat_level,
+                attack_type=attack_type,
+                response_type=response_type,
+                duration=duration,
+                timestamp=datetime.utcnow()
             )
-            db.add(attack_entry)
-
-
-            # 2. Update or Create Session
-            session = db.query(SessionTrace).filter(SessionTrace.ip_address == ip).first()
-            if not session:
-                session = SessionTrace(
-                    session_id=f"sess_{ip.replace('.', '_')}",
-                    ip_address=ip,
-                    total_requests=1
-                )
-                db.add(session)
-            else:
-                session.total_requests += 1
-                session.last_seen = datetime.utcnow()
-                if threat_score > session.max_threat_score:
-                    session.max_threat_score = threat_score
-
+            db.add(new_log)
             db.commit()
-            logger.warning(f"PERSISTED TRAP: {method} {path} from {ip}")
+
+            # 2. Broadcast via WebSocket for SOC Dashboard
+            event = {
+                "id": str(new_log.id),
+                "ip": ip,
+                "session_id": session_id,
+                "attack_type": attack_type,
+                "threat_score": threat_score,
+                "threat_level": threat_level,
+                "query": query,
+                "endpoint": endpoint,
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            }
+            await manager.broadcast(event)
             
+            self.logger.info(f"🚨 [{threat_level}] {attack_type} detected from {ip}. Score: {threat_score}")
         except Exception as e:
+            self.logger.error(f"Failed to log attack: {e}")
             db.rollback()
-            logger.error(f"Failed to log attack to DB: {e}")
         finally:
             db.close()
 
+    async def log_request(self, **kwargs):
+        """Logs every interaction for behavioral analysis."""
+        self.logger.info(f"🌐 Request: {kwargs.get('method')} {kwargs.get('path')} from {kwargs.get('ip')}")

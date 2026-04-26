@@ -6,8 +6,11 @@ psycopg2-binary
 motor
 python-dotenv
 openai
+google-genai
+mistralai
 scikit-learn
 pandas
-numpy
+numpy<2.0.0
 httpx
 python-multipart
+fpdf2

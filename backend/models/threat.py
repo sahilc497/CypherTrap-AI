@@ -1,36 +1,52 @@
+import uuid
+from sqlalchemy import Column, String, Float, DateTime, Text, ForeignKey, Integer
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 from backend.database.config import Base
-from sqlalchemy import Column, Integer, String, Float, DateTime, JSON
 from datetime import datetime
+
+class Session(Base):
+    __tablename__ = "sessions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_id = Column(String, unique=True, index=True) # Logic identifier (IP+UA hash)
+    ip_address = Column(String)
+    user_agent = Column(String)
+    
+    # Geolocation Intel
+    city = Column(String, default="Unknown")
+    country = Column(String, default="Unknown")
+    latitude = Column(Float)
+    longitude = Column(Float)
+    
+    # Forensic Intel
+    captured_face_url = Column(String) # URL or Base64 of the attacker's face
+    
+    first_seen = Column(DateTime, default=datetime.utcnow)
+    last_seen = Column(DateTime, default=datetime.utcnow)
+    request_count = Column(Integer, default=1)
+    risk_level = Column(String, default="Low")
+    current_threat_score = Column(Float, default=0.0)
+    
+    attacks = relationship("AttackLog", back_populates="session")
 
 class AttackLog(Base):
     __tablename__ = "attack_logs"
 
-    id = Column(Integer, primary_key=True, index=True)
-    request_id = Column(String, unique=True, index=True)
-    timestamp = Column(DateTime, default=datetime.utcnow)
-    ip_address = Column(String)
-    user_agent = Column(String)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_id_fk = Column(UUID(as_uuid=True), ForeignKey("sessions.id"))
+    session_id = Column(String, index=True) # Keeping original string id for easy access
+    attacker_ip = Column(String)
+    endpoint = Column(String)
     path = Column(String)
     method = Column(String)
     status_code = Column(Integer)
+    query = Column(Text)
+    threat_score = Column(Float)
+    threat_level = Column(String)
+    attack_type = Column(String)
+    response_type = Column(String)
     duration = Column(Float)
-    
-    # ML/AI Insights
-    threat_score = Column(Float, default=0.0)
-    threat_level = Column(String, default="Low") # Low, Medium, High
-    anomaly_score = Column(Float, default=0.0)
-    
-    # Summary of behavior
-    behavior_summary = Column(String, nullable=True)
+    timestamp = Column(DateTime, default=datetime.utcnow)
 
-class SessionTrace(Base):
-    """Aggregated session data for attackers."""
-    __tablename__ = "sessions"
-    
-    session_id = Column(String, primary_key=True, index=True)
-    first_seen = Column(DateTime, default=datetime.utcnow)
-    last_seen = Column(DateTime, default=datetime.utcnow)
-    ip_address = Column(String)
-    total_requests = Column(Integer, default=0)
-    max_threat_score = Column(Float, default=0.0)
-    is_active = Column(Integer, default=1)
+    session = relationship("Session", back_populates="attacks")

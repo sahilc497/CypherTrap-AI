@@ -1,102 +1,100 @@
 import os
 import json
-import logging
+import random
+import sys
+from typing import Dict, Any, List
 from dotenv import load_dotenv
-from google import genai
-from mistralai.client import Mistral
+
+# Robust Google GenAI Import (Handling namespace conflicts)
+try:
+    from google import genai
+    from google.genai import types
+except ImportError:
+    try:
+        # Fallback for some environment configurations
+        import google.genai as genai
+        from google.genai import types
+    except ImportError:
+        genai = None
+        types = None
+        print("WARNING: Google GenAI SDK could not be imported. Check your installation.")
+
+# Robust Mistral Import
+try:
+    from mistralai import Mistral
+except ImportError:
+    try:
+        from mistralai.client import MistralClient as Mistral
+    except ImportError:
+        Mistral = None
 
 load_dotenv()
-logger = logging.getLogger("AIDeceptionEngine")
 
 class AIDeceptionEngine:
     def __init__(self):
-        self.gemini_key = os.getenv("GEMINI_API_KEY")
-        self.mistral_key = os.getenv("MISTRAL_API_KEY")
-        
-        # Initialize Gemini (using new google-genai SDK)
+        # Initialize Google Gemini
         self.gemini_client = None
-        if self.gemini_key:
+        gemini_key = os.getenv("GEMINI_API_KEY")
+        if gemini_key and genai:
             try:
-                self.gemini_client = genai.Client(api_key=self.gemini_key)
-                logger.info("AI Engine: Gemini provider initialized.")
+                self.gemini_client = genai.Client(api_key=gemini_key)
             except Exception as e:
-                logger.error(f"Failed to initialize Gemini: {e}")
-        
-        # Initialize Mistral
+                print(f"Gemini Init Error: {e}")
+            
+        # Initialize Mistral as fallback
         self.mistral_client = None
-        if self.mistral_key:
+        mistral_key = os.getenv("MISTRAL_API_KEY")
+        if mistral_key and Mistral:
             try:
-                self.mistral_client = Mistral(api_key=self.mistral_key)
-                logger.info("AI Engine: Mistral provider initialized.")
+                self.mistral_client = Mistral(api_key=mistral_key)
             except Exception as e:
-                logger.error(f"Failed to initialize Mistral: {e}")
+                print(f"Mistral Init Error: {e}")
 
-    async def _call_llm(self, prompt: str, system_instruction: str = ""):
-        """Call the available LLM provider (Gemini preferred, then Mistral)."""
-        # 1. Try Gemini
-        if self.gemini_client:
+    async def generate_fake_db_result(self, query: str) -> List[Dict[str, Any]]:
+        """
+        Generates a highly realistic, context-aware fake database result using LLM.
+        """
+        system_prompt = """
+        You are a realistic production database. You must generate 3-5 rows of fake data in JSON format based on the user's SQL query.
+        RULES:
+        1. Output MUST be a valid JSON list of objects.
+        2. Data must be highly realistic (e.g., internal company emails, realistic hashes, UUIDs).
+        3. If the query asks for passwords, return bcrypt-like hashes.
+        4. If the query is destructive (DROP/DELETE), return an empty list but your overall system will handle the success message.
+        5. DO NOT include any explanatory text. ONLY the JSON list.
+        """
+        
+        user_prompt = f"SQL QUERY: {query}"
+        
+        # Try Gemini first
+        if self.gemini_client and genai:
             try:
-                # Synchronous call for now (SDK supports sync/async)
                 response = self.gemini_client.models.generate_content(
-                    model='gemini-1.5-flash',
-                    contents=prompt,
-                    config={'system_instruction': system_instruction}
+                    model="gemini-2.0-flash",
+                    contents=[system_prompt, user_prompt],
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json"
+                    )
                 )
-                return response.text
+                return json.loads(response.text)
             except Exception as e:
-                logger.error(f"Gemini error: {e}")
+                print(f"Gemini Error: {e}")
 
-        # 2. Try Mistral
+        # Try Mistral as fallback
         if self.mistral_client:
             try:
-                chat_response = self.mistral_client.chat.complete(
-                    model="mistral-tiny",
-                    messages=[
-                        {"role": "system", "content": system_instruction},
-                        {"role": "user", "content": prompt}
-                    ]
-                )
-                return chat_response.choices[0].message.content
+                # Handling both v1 and v2 client signatures
+                if hasattr(self.mistral_client, 'chat'):
+                    response = self.mistral_client.chat.complete(
+                        model="mistral-tiny",
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt}
+                        ]
+                    )
+                    return json.loads(response.choices[0].message.content)
             except Exception as e:
-                logger.error(f"Mistral error: {e}")
+                print(f"Mistral Error: {e}")
 
-        return None
-
-    async def generate_fake_db_result(self, query: str):
-        """Generates realistic synthetic data based on a SQL query."""
-        system_instruction = "You are a realistic database engine simulator. Return ONLY pure JSON data."
-        prompt = f"""
-        The user executed: "{query}"
-        Generate a realistic, synthetic JSON response representing the rows of data.
-        - If SELECT query, return a JSON list of objects.
-        - Use realistic mock data (names, emails, dates).
-        - No markdown formatting, no explanations, just the JSON array.
-        """
-
-        content = await self._call_llm(prompt, system_instruction)
-        if content:
-            try:
-                # Clean up markdown if AI included it
-                clean_content = content.replace("```json", "").replace("```", "").strip()
-                return json.loads(clean_content)
-            except Exception as e:
-                logger.error(f"JSON parsing error: {e}")
-        
-        return self._get_mock_response(query)
-
-    def _get_mock_response(self, query: str):
-        """Fallback mock response if AI is unavailable."""
-        if "users" in query.lower():
-            return [
-                {"id": 1, "username": "admin", "email": "admin@internal.local", "role": "superuser"},
-                {"id": 2, "username": "backup_agent", "email": "agent@internal.local", "role": "backup"}
-            ]
-        return {"status": "success", "rows_affected": 0}
-
-    async def generate_error_message(self, context: str):
-        """Generates a believable system error message."""
-        system_instruction = "You are a technical system administrator."
-        prompt = f"Generate a highly realistic, technical system error message for this context: {context}. Keep it under 20 words."
-        
-        content = await self._call_llm(prompt, system_instruction)
-        return content.strip() if content else "ERR_CONNECTION_REFUSED: Internal socket error."
+        # Fallback to empty if both fail (Simulator will handle it)
+        return []

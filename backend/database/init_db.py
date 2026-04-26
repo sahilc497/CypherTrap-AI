@@ -1,9 +1,11 @@
 from backend.database.config import engine, Base
-from backend.models.threat import AttackLog, SessionTrace
+from backend.models.threat import AttackLog, Session
 
 def init_db():
     print("Initializing PostgreSQL Database...")
     try:
+        # Drop all tables first to ensure schema updates are applied
+        Base.metadata.drop_all(bind=engine)
         # Create all tables
         Base.metadata.create_all(bind=engine)
         print("Tables created successfully.")

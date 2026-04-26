@@ -2,7 +2,7 @@ import time
 import uuid
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from backend.routes import deception, stats, vulnerable
+from backend.routes import deception, stats, vulnerable, realtime, decoy
 from backend.services.logger import AttackLogger
 
 app = FastAPI(title="CypherTrap AI - Intelligent Deception System")
@@ -56,6 +56,8 @@ async def track_attacker_request(request: Request, call_next):
 app.include_router(vulnerable.router, tags=["Legacy Vulnerable App"])
 app.include_router(deception.router, tags=["Deception Layer"])
 app.include_router(stats.router, prefix="/api", tags=["Statistics"])
+app.include_router(realtime.router, tags=["Realtime"])
+app.include_router(decoy.router, prefix="/api/decoy", tags=["Honeytrap"])
 
 @app.get("/")
 async def root():
