@@ -71,7 +71,3 @@ Navigate to the Honey-Camera Trap on Computer B:
 2. Grant Camera/Location access.
 3. **Check the Dashboard on Computer A**: Watch as the attacker's **Real Face** and **Location** appear on the screen!
 
----
-
-## 📜 License
-MIT License - Developed for Advanced Cybersecurity Research & Competition.
