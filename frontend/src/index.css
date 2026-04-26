@@ -1,0 +1,64 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@theme {
+  --color-cyber-bg: #05070a;
+  --color-cyber-card: #0d1117;
+  --color-cyber-border: #30363d;
+  --color-cyber-primary: #00f2ff;
+  --color-cyber-secondary: #7000ff;
+  --color-cyber-danger: #ff003c;
+  --color-cyber-success: #00ff88;
+  --color-cyber-warning: #ffcc00;
+
+  --background-image-glass-gradient: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
+  
+  --shadow-cyber-glow: 0 0 15px rgba(0, 242, 255, 0.3);
+  --shadow-danger-glow: 0 0 15px rgba(255, 0, 60, 0.3);
+}
+
+@layer base {
+  body {
+    @apply bg-cyber-bg text-gray-300 font-sans antialiased;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-white font-bold tracking-tight;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-cyber-bg;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-cyber-border rounded-full hover:bg-gray-600 transition-colors;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-cyber-card border border-cyber-border rounded-xl backdrop-blur-md shadow-xl overflow-hidden;
+  }
+  
+  .cyber-button {
+    @apply px-4 py-2 bg-cyber-primary/10 border border-cyber-primary/50 text-cyber-primary rounded-lg 
+           hover:bg-cyber-primary hover:text-cyber-bg transition-all duration-300 font-medium active:scale-95;
+  }
+
+  .neon-text-primary {
+    @apply text-cyber-primary drop-shadow-[0_0_8px_rgba(0,242,255,0.5)];
+  }
+
+  .cyber-input {
+    @apply bg-cyber-bg border border-cyber-border rounded-lg px-4 py-2 focus:border-cyber-primary/50 
+           focus:outline-none focus:ring-1 focus:ring-cyber-primary/50 transition-all text-white;
+  }
+}
+
+.bg-grid {
+  background-size: 40px 40px;
+  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}

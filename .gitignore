@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# Node
+node_modules/
+dist/
+.DS_Store
+
+# Project Specific
+CypherTrap_Demo_Queries.pdf
+generate_demo_pdf.py
+*.log
+database/*.db
