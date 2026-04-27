@@ -26,14 +26,24 @@ classifier = AttackClassifier()
 logger = AttackLogger()
 
 @router.post("/db")
-async def fake_db_query(db_body: DbQuery, request: Request, background_tasks: BackgroundTasks, db: DBSession = Depends(get_db)):
+async def fake_db_query(request: Request, background_tasks: BackgroundTasks, db: DBSession = Depends(get_db)):
     """
     Intelligent Deception System Endpoint with Session Tracking.
+    Handles both valid and malformed JSON for maximum threat capture.
     """
-    query = db_body.query
     start_time = time.time()
     
-    # 1. Session Management
+    # 1. Attempt to parse body (handle malformed JSON attacks)
+    try:
+        body = await request.json()
+        query = body.get("query", "EMPTY_QUERY")
+    except Exception:
+        # Capture raw body if JSON is malformed
+        raw_data = await request.body()
+        query = raw_data.decode('utf-8', errors='ignore')
+        print(f"[DECEPTION] Malformed JSON received: {query}")
+    
+    # 2. Session Management
     session_mgr = SessionManager(db)
     attacker_session = session_mgr.get_or_create_session(request)
     

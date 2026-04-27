@@ -1,6 +1,8 @@
 import time
 import uuid
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from backend.routes import deception, stats, vulnerable, realtime, decoy
 from backend.services.logger import AttackLogger
@@ -18,6 +20,26 @@ app.add_middleware(
 
 # Initialize Attack Logger (singleton or service)
 attack_logger = AttackLogger()
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    Captures malformed requests that fail Pydantic validation.
+    In a deception system, we often want to log these and return a deceptive response.
+    """
+    client_host = request.client.host
+    print(f"[THREAT_LOG] Validation Error from {client_host}: {exc}")
+    
+    # Return a deceptive response instead of a standard 422
+    return JSONResponse(
+        status_code=422,
+        content={
+            "status": "error",
+            "message": "Invalid request format",
+            "details": "The server could not understand the request body.",
+            "error_type": "SchemaMismatch"
+        }
+    )
 
 @app.middleware("http")
 async def track_attacker_request(request: Request, call_next):

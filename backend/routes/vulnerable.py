@@ -1,5 +1,5 @@
 import os
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
@@ -18,15 +18,25 @@ class QueryRequest(BaseModel):
     query: str
 
 @router.post("/legacy/db")
-async def vulnerable_db_access(request: QueryRequest):
+async def vulnerable_db_access(request: Request):
     """
     WARNING: THIS IS A VULNERABLE ENDPOINT FOR DEMO PURPOSES.
     It executes raw SQL and returns real data/errors.
+    Now handles malformed JSON for better logging.
     """
+    # 1. Parse query manually
+    try:
+        body = await request.json()
+        query = body.get("query", "")
+    except Exception:
+        raw_body = await request.body()
+        query = raw_body.decode('utf-8', errors='ignore')
+        print(f"[VULNERABLE_APP] Malformed JSON received: {query}")
+
     db = SessionLocal()
     try:
         # ❌ CRITICAL VULNERABILITY: Raw SQL execution without parameterization
-        result = db.execute(text(request.query))
+        result = db.execute(text(query))
         
         # If it's a SELECT, return the rows
         if result.returns_rows:
